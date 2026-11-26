@@ -43,6 +43,19 @@ export interface SessionSummary {
 	finished: boolean;
 }
 
+/** The panel shows plain text: drop emphasis, heading and code markers, and turn list dashes into bullets. */
+export function plainText(markdown: string): string {
+	return markdown
+		.replace(/^```.*$/gm, "")
+		.replace(/^#{1,6}\s+/gm, "")
+		.replace(/^(\s*)[-*]\s+/gm, "$1• ")
+		.replace(/(\*\*|__)(.+?)\1/g, "$2")
+		.replace(/`([^`]+)`/g, "$1")
+		.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim();
+}
+
 const ASK_CHARS = 400;
 const REPLY_CHARS = 300;
 const TEST_RUNNER =
@@ -123,7 +136,7 @@ export function summarize(entries: readonly unknown[], refPattern?: RegExp): Ses
 			cost += Number(message.usage?.cost?.total ?? 0);
 			interrupted = message.stopReason === "aborted";
 			if (interrupted) corrections += 1;
-			if (text) lastReply = truncate(text, REPLY_CHARS);
+			if (text) lastReply = truncate(plainText(text), REPLY_CHARS);
 			for (const part of Array.isArray(message.content) ? message.content : []) {
 				if (part?.type === "toolCall" && typeof part.id === "string") calls.set(part.id, { name: part.name, args: part.arguments });
 			}

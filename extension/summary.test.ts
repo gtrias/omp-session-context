@@ -171,4 +171,8 @@ describe("stats", () => {
 	it("keeps the last assistant text as the reply", () => {
 		expect(summarize([user("go"), assistant("all done here")]).lastReply).toBe("all done here");
 	});
+	it("shows the reply as plain text", () => {
+		const reply = "**Done**\n- fixed `foo`\n- see [docs](https://x.y)";
+		expect(summarize([user("go"), assistant(reply)]).lastReply).toBe("Done\n• fixed foo\n• see docs (https://x.y)");
+	});
 });
