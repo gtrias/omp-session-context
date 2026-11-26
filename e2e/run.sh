@@ -30,7 +30,7 @@ TASK='Use the todo tool to plan 3 short tasks. Add a --version flag to install.s
 if [ -n "${E2E_REPO:-}" ]; then
   git -C "$DEMO" remote add origin "https://github.com/$E2E_REPO.git"
   git -C "$DEMO" push -q -f origin main
-  TASK="$TASK Do it on a branch named $BRANCH, then open a pull request with gh pr create --fill."
+  TASK="$TASK Do it on a branch named $BRANCH, commit, run git push -u origin $BRANCH, then open a pull request with gh pr create --fill."
 fi
 BEFORE="$(APP status | jq -r .tab)"
 OUT="$(APP do tab.new --name e2e-demo --folder "$DEMO" --argv '["omp"]' --task "$TASK" --focus false)"
