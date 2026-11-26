@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { contextPath, panelState, parseContext, showsLastReply, splitAddress, statusLine, verdictPath } from "./view.js";
+import { contextPath, panelState, parentAddress, parentLine, parseContext, showsLastReply, splitAddress, statusLine, verdictPath } from "./view.js";
 
 const ctx = (over = {}) => JSON.stringify({ version: 1, sessionId: "s1", terminalId: "t1r", updatedAt: "2026-11-25T10:00:00.000Z", waiting: null, ended: false, lastReply: "All done", ...over });
 const NOW = Date.parse("2026-11-25T10:05:00.000Z");
@@ -69,4 +69,14 @@ describe("showsLastReply", () => {
     expect(showsLastReply("idle", c({ ended: true }))).toBe(false);
     expect(showsLastReply("idle", c({ lastReply: null }))).toBe(false);
   });
+});
+
+describe("parentAddress", () => {
+  it("puts the parent on the focused terminal's machine", () => expect(parentAddress("host/t5", "t4")).toBe("host/t4"));
+  it("keeps a local one bare", () => expect(parentAddress("t5", "t4")).toBe("t4"));
+});
+
+describe("parentLine", () => {
+  it("prefers the title", () => expect(parentLine({ terminalId: "t4", title: "Plan", ask: "Do it" })).toBe("Plan"));
+  it("falls back to the terminal", () => expect(parentLine({ terminalId: "t4", title: null, ask: null })).toBe("terminal t4"));
 });

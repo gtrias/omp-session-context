@@ -1,6 +1,17 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { type LinkDetails, type SessionLink, linksIn, messageText, pinsIn, truncate } from "./links.ts";
-import { type ContextFile, appendEvaluation, contextDir, evaluationOf, isSubagentSession, latestEvaluation, pruneContexts, writeContext } from "./store.ts";
+import {
+	type ContextFile,
+	appendEvaluation,
+	contextDir,
+	evaluationOf,
+	isSubagentSession,
+	latestEvaluation,
+	parentSession,
+	parentTerminal,
+	pruneContexts,
+	writeContext,
+} from "./store.ts";
 import { summarize } from "./summary.ts";
 
 /**
@@ -60,6 +71,8 @@ export default function sessionContext(pi: ExtensionAPI) {
 	let lastCtx: ExtensionContext | undefined;
 	// No file and no history from a nested omp or a `task` subagent (which shares the parent's terminal).
 	let silent = NESTED;
+	// The terminal this one was started from (asked herdr-core once); undefined until known.
+	let parentId: string | null | undefined;
 
 	/** Records every link in `text` as just mentioned; returns how many it found. */
 	const record = (text: string): number => {
@@ -120,6 +133,8 @@ export default function sessionContext(pi: ExtensionAPI) {
 				title: details.get(link.key)?.title ?? null,
 			})),
 			ended,
+			// Read on every write: the parent's title and request can change after this session starts.
+			parent: parentId ? parentSession(CONTEXT_DIR, parentId) : null,
 		};
 	};
 
@@ -189,6 +204,16 @@ export default function sessionContext(pi: ExtensionAPI) {
 		render(ctx);
 		fetchDetails(ctx, ordered().slice(0, WIDGET_ROWS));
 		if (TERMINAL_ID) branchOf(ctx.cwd).then(() => scheduleWrite(ctx)).catch(() => {});
+		if (TERMINAL_ID && parentId === undefined) {
+			parentId = null;
+			pi.exec("hc", ["get", TERMINAL_ID])
+				.then((result) => {
+					if (result.code !== 0) return;
+					parentId = parentTerminal(JSON.parse(result.stdout));
+					if (parentId) scheduleWrite(ctx);
+				})
+				.catch(() => {});
+		}
 	};
 
 	// The list follows the branch on screen: a new, resumed, forked or navigated session rebuilds it.

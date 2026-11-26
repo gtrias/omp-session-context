@@ -40,6 +40,7 @@ echo "tab $TAB terminal $TERMINAL in $DEMO"
 cleanup() {
   [ -n "${KEEP:-}" ] && return
   APP do tab.close --id "$TAB" >/dev/null 2>&1 || true
+  [ -n "${CHILD_TAB:-}" ] && { APP do tab.close --id "$CHILD_TAB" >/dev/null 2>&1 || true; }
   [ -n "${E2E_REPO:-}" ] && gh pr close "$BRANCH" --repo "$E2E_REPO" --delete-branch >/dev/null 2>&1 || true
   rm -rf "$ROOT"
 }
@@ -61,6 +62,30 @@ check '.lastReply | test("\\*\\*|^- ") | not' "last reply is plain text"
 check '.waiting == null' "not waiting on anything"
 if [ -n "${E2E_REPO:-}" ]; then
   check '[.links[] | select(.url | ascii_downcase | contains(env.E2E_REPO | ascii_downcase))] | length > 0' "the pull request shows up as a link"
+fi
+
+# An agent that starts another one: herdr-core records the parent, and the child's panel names it.
+PREFIX="${TAB%%/*}"; [ "$PREFIX" = "$TAB" ] && PREFIX="" || PREFIX="$PREFIX/"
+CHILD_TAB_ID="tb$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+CHILD="$(hc run --json --bg --keep --no-notify --outlive-parent --parent "$TERMINAL" --cwd "$DEMO" \
+  --label "herdr.space=$(jq -r '.space | split("/") | last' <<<"$OUT")" --label "herdr.tab=$CHILD_TAB_ID" \
+  -- omp "Write a one-line README.md describing this repo. Keep the reply short." | jq -r '.address // .terminal')"
+CHILD="${CHILD##*/}"; CHILD_TAB="$PREFIX$CHILD_TAB_ID"
+echo "child terminal $CHILD (parent $TERMINAL)"
+hc wait "$CHILD" --timeout 300000 >/dev/null
+FILE="$STATE/$CHILD.json"
+for _ in $(seq 20); do jq -e '.parent != null and .lastReply != null' "$FILE" >/dev/null 2>&1 && break; sleep 0.5; done
+check '.parent.terminalId == "'"$TERMINAL"'"' "child names its parent terminal"
+check '.parent.title != null and .parent.sessionId != null' "child carries the parent's session and title"
+
+if [ -n "${CHILD_SHOT:-}" ]; then
+  APP do agent.focus --terminal "$PREFIX$CHILD" >/dev/null
+  sleep 4
+  REMOTE="${HERDR_SSH:+/tmp/omp-session-context-e2e-child.png}"
+  APP shot "${REMOTE:-$CHILD_SHOT}" >/dev/null
+  [ -n "$REMOTE" ] && scp -q "$HERDR_SSH:$REMOTE" "$CHILD_SHOT"
+  APP do tab.select --id "$BEFORE" >/dev/null
+  echo "child screenshot: $CHILD_SHOT"
 fi
 
 if [ -n "${SHOT:-}" ]; then

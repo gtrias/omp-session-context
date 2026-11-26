@@ -2,7 +2,19 @@ import { describe, expect, it } from "bun:test";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type ContextFile, type EvaluationRecord, appendEvaluation, contextDir, evaluationOf, isSubagentSession, latestEvaluation, pruneContexts, writeContext } from "./store.ts";
+import {
+	type ContextFile,
+	type EvaluationRecord,
+	appendEvaluation,
+	contextDir,
+	evaluationOf,
+	isSubagentSession,
+	latestEvaluation,
+	parentSession,
+	parentTerminal,
+	pruneContexts,
+	writeContext,
+} from "./store.ts";
 import { summarize } from "./summary.ts";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "session-context-"));
@@ -18,6 +30,7 @@ const context = (terminalId: string): ContextFile => ({
 	waiting: null,
 	links: [],
 	ended: false,
+	parent: null,
 });
 
 const record = (verdict: EvaluationRecord["verdict"]): EvaluationRecord => ({ ...evaluationOf(context("t1"), null), verdict });
@@ -75,4 +88,21 @@ describe("isSubagentSession", () => {
 		expect(isSubagentSession(join(dir, "parent.jsonl"))).toBe(false);
 		expect(isSubagentSession(undefined)).toBe(false);
 	});
+});
+
+describe("parentTerminal", () => {
+	it("takes herdr-core's parent", () => expect(parentTerminal({ parent: "t4c", labels: {} })).toBe("t4c"));
+	it("falls back to the launcher's label", () =>
+		expect(parentTerminal({ parent: null, labels: { "session-context.parent": "t2" } })).toBe("t2"));
+	it("is null for a terminal nobody started", () => expect(parentTerminal({ parent: null, labels: {} })).toBeNull());
+});
+
+describe("parentSession", () => {
+	it("reads the parent's title and first request from its context file", () => {
+		const dir = tmp();
+		writeContext(dir, { ...context("t4c"), sessionId: "p1", title: "Plan the release", ask: { first: "Ship 1.0", last: null } });
+		expect(parentSession(dir, "t4c")).toEqual({ terminalId: "t4c", sessionId: "p1", title: "Plan the release", ask: "Ship 1.0" });
+	});
+	it("keeps only the terminal when the parent has no file here", () =>
+		expect(parentSession(tmp(), "t9")).toEqual({ terminalId: "t9", sessionId: null, title: null, ask: null }));
 });

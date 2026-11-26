@@ -62,6 +62,12 @@ How a record is judged:
 - **corrections**: user messages that arrive while the todo has open tasks, plus every user interrupt. A simple heuristic.
 - **tests**: the last `bash` call whose command starts with a known test runner (`npm|pnpm|yarn|bun test`, `vitest`, `jest`, `pytest`, `go test`, `cargo test`, `just|make test`) and whether it failed.
 
+## Sessions started by other agents
+
+When an agent starts another one, the new session's panel shows *Started by* with the parent session's title. Click it to jump back to the parent.
+
+The parent comes from herdr-core: a terminal started with `hc run` from another terminal has it as its `parent`. Launchers that use `hc run --no-parent` (to keep the new terminal independent) can still name it with a label, `--label session-context.parent=$HC_TERMINAL_ID`. Both terminals must be on the same machine for the parent's title to show; otherwise you only see its terminal id.
+
 ## Options
 
 - `SESSION_CONTEXT_REF`: a regular expression for your own references (for example `\bT-\d+\b` for ticket ids). Matches are listed in the panel under *Tasks*, most recent first. Unset by default.

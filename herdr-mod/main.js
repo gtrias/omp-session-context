@@ -6,7 +6,7 @@
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { agents, checking, closeOverlay, exec, focused, props, readTextFile, run, spaces, theme, window } from "herdr";
-import { contextPath, panelState, showsLastReply, splitAddress, statusLine, verdictPath } from "./view.js";
+import { contextPath, panelState, parentAddress, parentLine, showsLastReply, splitAddress, statusLine, verdictPath } from "./view.js";
 
 const BLOCK = "session-context";
 const POLL_MS = 3_000;
@@ -157,6 +157,9 @@ export default class SessionContext extends View {
       .child(v_flex().gap(4)
         .child(div().font_semibold().text_color(statusColor).child(status))
         .child(div().text_size(11).text_color(t.dim).child([c.cwd, c.branch].filter(Boolean).join(" · ") + ` · updated ${state.ageText}`)))
+      .when(Boolean(c.parent), (el) => el.child(section("Started by", div().id("sc-parent").text_color(t.accent).cursor_pointer()
+        .child(`↖ ${parentLine(c.parent)}`)
+        .on_click(() => run("agent.focus", { terminal: parentAddress(this.terminal, c.parent.terminalId) })))))
       .child(section("You asked", v_flex().gap(6)
         .child(div().child(c.ask.first ?? "—"))
         .when(Boolean(c.ask.last), (el) => el.child(div().text_color(t.muted).child(`Latest: ${c.ask.last}`)))))

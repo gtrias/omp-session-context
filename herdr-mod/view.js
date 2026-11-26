@@ -75,3 +75,15 @@ export function statusLine(agentStatus, context, workingSince, now) {
 export function showsLastReply(agentStatus, context) {
   return Boolean(context?.lastReply) && !context.ended && (agentStatus === "done" || agentStatus === "idle");
 }
+
+/** The parent's address as the app knows it: the extension records a bare id on the agent's machine. */
+export function parentAddress(focusedAddress, parentId) {
+  if (parentId.includes("/")) return parentId;
+  const { machine } = splitAddress(focusedAddress);
+  return machine ? `${machine}/${parentId}` : parentId;
+}
+
+/** One line naming the session that started this one: its title, else its request, else its terminal. */
+export function parentLine(parent) {
+  return parent.title || parent.ask || `terminal ${parent.terminalId}`;
+}
