@@ -173,7 +173,7 @@ export default class SessionContext extends View {
           .children(p.tasks.map((task) => div().text_color(task.status === "completed" || task.status === "abandoned" ? t.dim : t.foreground)
             .child(`${{ completed: "✓", abandoned: "✗", in_progress: "▶" }[task.status] ?? "·"} ${task.content}`)))))))))
       .when(c.links.length > 0, (el) => el.child(section("Links", v_flex().gap(4).children(c.links.map((link, i) =>
-        h_flex().id(`sc-link-${i}`).gap(6).cursor_pointer()
+        h_flex().id(`sc-link-${i}`).gap(6).flex_wrap().cursor_pointer()
           .child(div().text_color(t.accent).child(`${link.pinned ? "📌 " : ""}${link.label}`))
           .when(Boolean(link.state), (el) => el.child(div().text_color(t.dim).child(`[${link.state}]`)))
           .when(Boolean(link.title), (el) => el.child(div().text_color(t.muted).child(link.title)))

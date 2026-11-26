@@ -9,11 +9,14 @@
 #   HERDR_SSH   host that runs Herdr Desktop, when it is not this machine (e.g. kelymaster-vpn)
 #   SHOT        path for a window screenshot (kept on this machine)
 #   KEEP=1      leave the demo tab open
+#   E2E_REPO    owner/name of a throwaway GitHub repo you can push to: the agent also opens a PR there (closed at the end)
 set -euo pipefail
 
 APP() { if [ -n "${HERDR_SSH:-}" ]; then ssh "$HERDR_SSH" "herdr-app $(printf '%q ' "$@")"; else herdr-app "$@"; fi; }
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/omp-session-context"
-DEMO="$(mktemp -d /tmp/omp-session-context-e2e.XXXXXX)"
+ROOT="$(mktemp -d /tmp/omp-session-context-e2e.XXXXXX)"
+DEMO="$ROOT/demo-tool"
+mkdir "$DEMO"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 git -C "$DEMO" init -q -b main
@@ -22,7 +25,13 @@ printf 'import { expect, it } from "bun:test";\nit("adds", () => expect(1 + 1).t
 chmod +x "$DEMO/install.sh"
 git -C "$DEMO" add -A && git -C "$DEMO" -c user.name=e2e -c user.email=e2e@example.com commit -qm init
 
+BRANCH="add-version-flag"
 TASK='Use the todo tool to plan 3 short tasks. Add a --version flag to install.sh that prints 0.1.0, check it by running ./install.sh --version, then run bun test. Keep replies short.'
+if [ -n "${E2E_REPO:-}" ]; then
+  git -C "$DEMO" remote add origin "https://github.com/$E2E_REPO.git"
+  git -C "$DEMO" push -q -f origin main
+  TASK="$TASK Do it on a branch named $BRANCH, then open a pull request with gh pr create --fill."
+fi
 BEFORE="$(APP status | jq -r .tab)"
 OUT="$(APP do tab.new --name e2e-demo --folder "$DEMO" --argv '["omp"]' --task "$TASK" --focus false)"
 TAB="$(jq -r .tab <<<"$OUT")"
@@ -31,7 +40,8 @@ echo "tab $TAB terminal $TERMINAL in $DEMO"
 cleanup() {
   [ -n "${KEEP:-}" ] && return
   APP do tab.close --id "$TAB" >/dev/null 2>&1 || true
-  rm -rf "$DEMO"
+  [ -n "${E2E_REPO:-}" ] && gh pr close "$BRANCH" --repo "$E2E_REPO" --delete-branch >/dev/null 2>&1 || true
+  rm -rf "$ROOT"
 }
 trap cleanup EXIT
 
@@ -49,6 +59,9 @@ check '.stats.tests.status == "passed"' "test run detected as passed"
 check '.stats.toolCalls > 0 and .stats.toolErrors <= .stats.toolCalls' "tool calls counted (the model may make real errors)"
 check '.lastReply | test("\\*\\*|^- ") | not' "last reply is plain text"
 check '.waiting == null' "not waiting on anything"
+if [ -n "${E2E_REPO:-}" ]; then
+  check '[.links[] | select(.url | ascii_downcase | contains(env.E2E_REPO | ascii_downcase))] | length > 0' "the pull request shows up as a link"
+fi
 
 if [ -n "${SHOT:-}" ]; then
   APP do tab.select --id "$TAB" >/dev/null

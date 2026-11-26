@@ -80,3 +80,5 @@ bun test extension herdr-mod
 HERDR_SSH=my-desktop-host ./e2e/run.sh            # HERDR_SSH only if Herdr Desktop runs on another machine
 SHOT=panel.png ./e2e/run.sh                       # also saves a screenshot of the window with the panel showing that session
 ```
+
+Set `E2E_REPO=owner/name` (a throwaway repo you can push to) and the agent also opens a pull request there, so the panel's *Links* section has something to show. The PR is closed at the end.
