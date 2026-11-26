@@ -71,3 +71,12 @@ How a record is judged:
 ```bash
 bun test extension herdr-mod
 ```
+
+## End-to-end check
+
+`e2e/run.sh` starts a real OMP agent in an unfocused Herdr tab on a throwaway repo, waits for it to finish and asserts what the extension wrote. It needs Herdr Desktop running, `hc`, `jq` and a working OMP model.
+
+```bash
+HERDR_SSH=my-desktop-host ./e2e/run.sh            # HERDR_SSH only if Herdr Desktop runs on another machine
+SHOT=panel.png ./e2e/run.sh                       # also saves a screenshot of the window with the panel showing that session
+```
