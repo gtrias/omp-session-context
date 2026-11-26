@@ -87,3 +87,31 @@ export function parentAddress(focusedAddress, parentId) {
 export function parentLine(parent) {
   return parent.title || parent.ask || `terminal ${parent.terminalId}`;
 }
+
+/** "anthropic/claude-sonnet-5-5" → "claude-sonnet-5-5": the provider is noise in a narrow panel. */
+export function shortModel(model) {
+  return model ? model.slice(model.lastIndexOf("/") + 1) : null;
+}
+
+/** Which theme color a link's state takes: open work stands out, finished work steps back. */
+export function linkTone(state) {
+  if (state === "open") return "done";
+  if (state === "merged") return "accent";
+  if (state === "closed") return "dim";
+  return "muted";
+}
+
+/**
+ * The session's numbers as short chips, each with a tone. Zero corrections and zero tool errors say nothing at a
+ * glance, so they only appear when they happened.
+ */
+export function statChips(stats) {
+  const chips = [];
+  const model = shortModel(stats.model);
+  if (model) chips.push({ text: model, tone: "muted" });
+  chips.push({ text: `$${stats.cost.toFixed(2)}`, tone: "muted" });
+  if (stats.tests.status !== "none") chips.push({ text: `tests ${stats.tests.status}`, tone: stats.tests.status === "passed" ? "done" : "blocked" });
+  if (stats.corrections > 0) chips.push({ text: `${stats.corrections} correction${stats.corrections === 1 ? "" : "s"}`, tone: "muted" });
+  if (stats.toolErrors > 0) chips.push({ text: `${stats.toolErrors}/${stats.toolCalls} tool errors`, tone: "muted" });
+  return chips;
+}
