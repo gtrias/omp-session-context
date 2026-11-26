@@ -1,0 +1,7 @@
+{
+	"name": "session-context",
+	"private": true,
+	"type": "module",
+	"keywords": ["pi-package"],
+	"scripts": { "test": "bun test" }
+}

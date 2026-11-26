@@ -1,0 +1,1 @@
+{ "place": "none", "palette": [{ "title": "Session context", "command": "mod.open", "args": { "name": "session-context" }, "words": "session context omp todo links agent" }] }

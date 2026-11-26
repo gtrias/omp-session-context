@@ -1,0 +1,5 @@
+{
+  "name": "omp-session-context",
+  "private": true,
+  "scripts": { "test": "bun test extension herdr-mod" }
+}
