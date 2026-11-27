@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import { type LinkDetails, type SessionLink, linksIn, messageText, pinsIn, truncate } from "./links.ts";
+import { type LinkDetails, type SessionLink, messageText, pinsIn, truncate } from "./links.ts";
+import { LinkRegistry } from "./registry.ts";
 import {
 	type ContextFile,
 	appendEvaluation,
@@ -32,7 +33,6 @@ const PINS_ENTRY = "session-context.pins";
 const WIDGET_KEY = "session-context";
 const STATUS_KEY = "session-context";
 const WIDGET_ROWS = 3;
-const TITLE_WIDTH = 64;
 const WRITE_DEBOUNCE_MS = 1000;
 const KEEP_CONTEXT_MS = 7 * 24 * 60 * 60 * 1000;
 const WAITING_CHARS = 200;
@@ -59,12 +59,11 @@ function askText(args: unknown): string {
 export default function sessionContext(pi: ExtensionAPI) {
 	pi.setLabel("Session context");
 
-	const links = new Map<string, SessionLink>();
+	// The link list and pins live in the registry; the widget and `/links` read from it.
+	const registry = new LinkRegistry();
 	const details = new Map<string, LinkDetails>();
 	const fetching = new Set<string>();
 	const branches = new Map<string, string | null>();
-	let pins: string[] = [];
-	let counter = 0;
 	let widgetOn = true;
 	let waiting: ContextFile["waiting"] = null;
 	let writeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -74,30 +73,9 @@ export default function sessionContext(pi: ExtensionAPI) {
 	// The terminal this one was started from (asked herdr-core once); undefined until known.
 	let parentId: string | null | undefined;
 
-	/** Records every link in `text` as just mentioned; returns how many it found. */
-	const record = (text: string): number => {
-		const found = linksIn(text);
-		for (const link of found) {
-			counter += 1;
-			const known = links.get(link.key);
-			links.set(link.key, { ...link, lastSeen: counter, mentions: (known?.mentions ?? 0) + 1 });
-		}
-		return found.length;
-	};
+	const ordered = (): SessionLink[] => registry.ordered();
 
-	const ordered = (): SessionLink[] => {
-		const all = [...links.values()].sort((a, b) => b.lastSeen - a.lastSeen);
-		const pinned = pins.map((key) => links.get(key)).filter((link): link is SessionLink => link !== undefined);
-		return [...pinned, ...all.filter((link) => !pins.includes(link.key))];
-	};
-
-	const describe = (link: SessionLink): string => {
-		const info = details.get(link.key);
-		const pin = pins.includes(link.key) ? "📌 " : "";
-		const state = info?.state ? ` [${info.state}]` : "";
-		const title = info?.title ? ` ${truncate(info.title, TITLE_WIDTH)}` : "";
-		return `${pin}${link.label}${state}${title}`;
-	};
+	const describe = (link: SessionLink): string => registry.describe(link, details.get(link.key));
 
 	/** The git branch of `cwd`, asked once per directory. */
 	const branchOf = async (cwd: string): Promise<string | null> => {
@@ -128,7 +106,7 @@ export default function sessionContext(pi: ExtensionAPI) {
 				label: link.label,
 				url: link.url,
 				kind: link.kind,
-				pinned: pins.includes(link.key),
+				pinned: registry.isPinned(link.key),
 				state: details.get(link.key)?.state ?? null,
 				title: details.get(link.key)?.title ?? null,
 			})),
@@ -163,7 +141,7 @@ export default function sessionContext(pi: ExtensionAPI) {
 			ctx.ui.setWidget(WIDGET_KEY, undefined);
 			return;
 		}
-		const more = links.size - shown.length;
+		const more = registry.size() - shown.length;
 		const lines = shown.map((link) => `🔗 ${describe(link)}  ${link.url}`);
 		if (more > 0) lines.push(`   +${more} more · /links`);
 		ctx.ui.setWidget(WIDGET_KEY, lines, { placement: "aboveEditor" });
@@ -193,13 +171,11 @@ export default function sessionContext(pi: ExtensionAPI) {
 	};
 
 	const rebuild = (ctx: ExtensionContext) => {
-		links.clear();
-		counter = 0;
-		pins = [];
+		registry.reset();
 		waiting = null;
 		for (const entry of ctx.sessionManager.getBranch()) {
-			if (entry.type === "message") record(messageText(entry.message));
-			if (entry.type === "custom" && entry.customType === PINS_ENTRY) pins = pinsIn(entry.data);
+			if (entry.type === "message") registry.record(messageText(entry.message));
+			if (entry.type === "custom" && entry.customType === PINS_ENTRY) registry.setPins(pinsIn(entry.data));
 		}
 		render(ctx);
 		fetchDetails(ctx, ordered().slice(0, WIDGET_ROWS));
@@ -227,7 +203,7 @@ export default function sessionContext(pi: ExtensionAPI) {
 	pi.on("session_tree", async (_event, ctx) => rebuild(ctx));
 
 	pi.on("message_end", async (event, ctx) => {
-		if (record(messageText(event.message)) > 0) fetchDetails(ctx, ordered().slice(0, WIDGET_ROWS));
+		if (registry.record(messageText(event.message)) > 0) fetchDetails(ctx, ordered().slice(0, WIDGET_ROWS));
 		render(ctx);
 	});
 
@@ -289,15 +265,15 @@ export default function sessionContext(pi: ExtensionAPI) {
 			fetchDetails(ctx, all);
 			const options = all.map((link) => ({
 				label: describe(link),
-				description: `${link.url} · ${link.mentions} mention${link.mentions === 1 ? "" : "s"} · ${pins.includes(link.key) ? "select to unpin" : "select to pin"}`,
+				description: `${link.url} · ${link.mentions} mention${link.mentions === 1 ? "" : "s"} · ${registry.isPinned(link.key) ? "select to unpin" : "select to pin"}`,
 			}));
 			const chosen = await ctx.ui.select("Session links", options);
 			const link = all.find((item) => describe(item) === chosen);
 			if (!link) return;
-			pins = pins.includes(link.key) ? pins.filter((key) => key !== link.key) : [link.key, ...pins];
-			pi.appendEntry(PINS_ENTRY, { pins });
+			const pinned = registry.togglePin(link.key);
+			pi.appendEntry(PINS_ENTRY, { pins: registry.pins });
 			render(ctx);
-			ctx.ui.notify(`${pins.includes(link.key) ? "Pinned" : "Unpinned"} ${link.label}`, "info");
+			ctx.ui.notify(`${pinned ? "Pinned" : "Unpinned"} ${link.label}`, "info");
 		},
 	});
 }
